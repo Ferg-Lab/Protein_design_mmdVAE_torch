@@ -10,6 +10,10 @@ class Encoder(nn.Module):
     def __init__(self, seq_len, aa_var, zdim, alpha):
         super(Encoder, self).__init__()
         
+        self.zdim = zdim
+        self.seq_len = seq_len
+        self.aa_var = aa_var
+        self.alpha = alpha
         self.q  = seq_len * aa_var
         self.hsize=int(1.5*self.q)
         #self.en_mu = nn.Linear(self.hsize, d)
@@ -18,20 +22,20 @@ class Encoder(nn.Module):
         self.model = nn.Sequential(
             #encoder layer 1
             nn.Linear(self.q, self.hsize),
-            nn.LeakyReLU(alpha, inplace=True),
+            nn.LeakyReLU(self.alpha, inplace=True),
             nn.Dropout(p=0.3),
             
             #encoder layer 2
             nn.Linear(self.hsize, self.hsize),
-            nn.LeakyReLU(alpha, inplace=True),
+            nn.LeakyReLU(self.alpha, inplace=True),
             nn.BatchNorm1d(self.hsize), # BN1
             
             #encoder layer 3
             nn.Linear(self.hsize, self.hsize),
-            nn.LeakyReLU(alpha, inplace=True),
+            nn.LeakyReLU(self.alpha, inplace=True),
             #nn.BatchNorm1d(self.hsize), # BN1
             
-            nn.Linear(self.hsize, zdim)
+            nn.Linear(self.hsize, self.zdim)
         )
     def forward(self, x):
         x = x.view(x.size(0), self.q)
@@ -43,24 +47,27 @@ class Decoder(nn.Module):
     def __init__(self, seq_len, aa_var, zdim, alpha):
         super(Decoder, self).__init__()
         
+        self.seq_len = seq_len
+        self.aa_var = aa_var
+        self.alpha = alpha
         self.q = seq_len * aa_var
         self.zdim = zdim
         self.hsize=int(1.5*self.q)
         
         self.model = nn.Sequential(
             #decoder layer 1
-            nn.Linear(zdim, self.hsize),
-            nn.LeakyReLU(alpha, inplace=True),
+            nn.Linear(self.zdim, self.hsize),
+            nn.LeakyReLU(self.alpha, inplace=True),
             nn.BatchNorm1d(self.hsize), #BN2
             
             #decoder layer 2
             nn.Linear(self.hsize, self.hsize),
-            nn.LeakyReLU(alpha, inplace=True),
+            nn.LeakyReLU(self.alpha, inplace=True),
             nn.Dropout(p=0.3),
             
             #decoder layer 3
             nn.Linear(self.hsize, self.hsize),
-            nn.LeakyReLU(alpha, inplace=True),
+            nn.LeakyReLU(self.alpha, inplace=True),
             nn.BatchNorm1d(self.hsize), 
             
             nn.Linear(self.hsize, self.q),
@@ -68,7 +75,7 @@ class Decoder(nn.Module):
         )
     def forward(self, z):
         outputs = self.model(z)
-        outputs = outputs.view(z.size(0), seq_len, aa_var)
+        outputs = outputs.view(z.size(0), self.seq_len, self.aa_var)
         outputs = nn.Softmax(dim = 2)(outputs)
         return outputs
 
@@ -89,10 +96,10 @@ class MMD_VAE(nn.Module):
         return z, recon_x
     
 
-def loss_function(recon_x, x, z):
+def loss_function(recon_x, x, z, device_name):
     batch_size = x.size(0)
     zdim = z.size(1)
-    true_samples = torch.randn(batch_size, zdim, requires_grad = False).to(device)
+    true_samples = torch.randn(batch_size, zdim, requires_grad = False).to(device_name)
 
     loss_MMD = compute_mmd(true_samples, z)
     loss_REC = (recon_x - x).pow(2).mean()
