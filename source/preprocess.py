@@ -57,7 +57,7 @@ def create_one_hot(df):
     train_inputs = preprocess_inputs(df, token2int)
     
     sample = len(df)
-    positions = len(df.iloc[0, 0])
+    positions = len(df.iloc[0].Sequence)
     
     hot_inputs = np.zeros((train_inputs.shape[0], positions, 21))
     
