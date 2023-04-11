@@ -50,8 +50,6 @@ def create_one_hot(df):
     
     """
     # We will use this dictionary to map each character to an integer so that it can be used as an input to our ML models:
-    dict_int2aa = {0:"A",1:"C",2:"D",3:"E",4:"F",5:"G",6:"H",7:"I",8:"K",9:"L",10:"M",11:"N",12:"P",13:"Q",14:"R",15:"S",16:"T",17:"V",18:"W",19:"Y",20:"-"}
-
     token2int = {x:i for i, x in enumerate('ACDEFGHIKLMNPQRSTVWY-')}
 
     train_inputs = preprocess_inputs(df, token2int)
@@ -68,6 +66,12 @@ def create_one_hot(df):
     return hot_inputs
 
 
-
-
-
+def int2aa(samples):
+    
+    dict_int2aa = {0:"A",1:"C",2:"D",3:"E",4:"F",5:"G",6:"H",7:"I",8:"K",9:"L",10:"M",11:"N",12:"P",13:"Q",14:"R",15:"S",16:"T",17:"V",18:"W",19:"Y",20:"-"}
+    aa_samples = []
+    
+    for i in range(len(samples)):
+        aa_samples.append(''.join([dict_int2aa[i] for i in samples[i]]))
+    
+    return aa_samples

@@ -1,0 +1,6 @@
+# Ignore all ipynb checkpoints
+.ipynb_checkpoints/
+
+# Ignore all __pycache__ directories
+*.pyc
+*.pyt
