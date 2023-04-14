@@ -40,7 +40,6 @@ class Encoder(nn.Module):
     def forward(self, x):
         x = x.view(x.size(0), self.q)
         return self.model(x)
-
     
 class Decoder(nn.Module):
     
@@ -79,23 +78,33 @@ class Decoder(nn.Module):
         outputs = nn.Softmax(dim = 2)(outputs)
         return outputs
 
-
-class MMD_VAE(nn.Module):
-    def __init__(self, zdims, seq_len, aa_var, alpha):
-        super(MMD_VAE, self).__init__()
+class Regression(nn.Module):
+    def __init__(self, zdims, omega = 10, p = 0.2):
+        super(Regression, self).__init__()
         self.zdims = zdims
-        self.seq_len = seq_len
-        self.aa_var = aa_var
-        self.alpha = alpha
-        self.encoder = Encoder(self.seq_len, self.aa_var, self.zdims, self.alpha)
-        self.decoder = Decoder(self.seq_len, self.aa_var, self.zdims, self.alpha)
+        self.omega = omega
+        self.tanh = nn.Tanh()
+        self.relu = nn.ReLU()
+        self.p = p
+        
+        self.dropout = nn.Dropout(p)
+        
+        self.regressor = nn.Linear(self.zdims, self.omega)
+        nn.init.xavier_normal_(self.regressor.weight)
+        
+        self.regressor_out = nn.Linear(self.omega, self.omega)
+        nn.init.xavier_normal_(self.regressor_out.weight)
+        
+        self.dense_out_R = nn.Linear(self.omega, 1)
+        nn.init.xavier_normal_(self.dense_out_R.weight)
     
-    def forward(self, x):
-        z = self.encoder(x)
-        recon_x = self.decoder(z)
-        return z, recon_x
+    def forward(self, z):
+        h_R = self.dropout(self.tanh(self.regressor(z)))
+        h_R = self.dropout(self.relu(self.regressor_out(h_R)))
+        out = self.dense_out_R(h_R)
+        return out
     
-
+    
 def loss_function(recon_x, x, z, device_name):
     batch_size = x.size(0)
     zdim = z.size(1)
@@ -105,6 +114,20 @@ def loss_function(recon_x, x, z, device_name):
     loss_REC = (recon_x - x).pow(2).mean()
 
     return loss_REC + 2*loss_MMD, loss_REC, loss_MMD
+
+def loss_ss(recon_x, x, z, y, y_pred, device_name):
+    batch_size = x.size(0)
+    zdim = z.size(1)
+    
+    mask = ~torch.isnan(y)
+    
+    true_samples = torch.randn(batch_size, zdim, requires_grad = False).to(device_name)
+
+    loss_MMD = compute_mmd(true_samples, z)
+    loss_REC = (recon_x - x).pow(2).mean()
+    loss_pred= (y[mask] - y_pred[mask]).pow(2).mean()
+
+    return loss_REC + 2*loss_MMD + 0.5 * loss_pred, loss_REC, loss_MMD, loss_pred
 
 def compute_kernel(x, y):
     x_size = x.size(0)
@@ -124,3 +147,41 @@ def compute_mmd(x, y):
     xy_kernel = compute_kernel(x, y)
     mmd = x_kernel.mean() + y_kernel.mean() - 2*xy_kernel.mean()
     return mmd
+
+class MMD_VAE(nn.Module):
+    def __init__(self, zdims, seq_len, aa_var, alpha):
+        super(MMD_VAE, self).__init__()
+        self.zdims = zdims
+        self.seq_len = seq_len
+        self.aa_var = aa_var
+        self.alpha = alpha
+        self.encoder = Encoder(self.seq_len, self.aa_var, self.zdims, self.alpha)
+        self.decoder = Decoder(self.seq_len, self.aa_var, self.zdims, self.alpha)
+    
+    def forward(self, x):
+        z = self.encoder(x)
+        recon_x = self.decoder(z)
+        return z, recon_x
+    
+    
+class SS_MMD(nn.Module):
+    def __init__(self, zdims, seq_len, aa_var, alpha):
+        super(SS_MMD, self).__init__()
+        self.zdims = zdims
+        self.seq_len = seq_len
+        self.aa_var = aa_var
+        self.alpha = alpha
+        
+        self.encoder = Encoder(self.seq_len, self.aa_var, self.zdims, self.alpha)
+        self.decoder = Decoder(self.seq_len, self.aa_var, self.zdims, self.alpha)
+
+        self.regressor = Regression(self.zdims)
+    
+    def forward(self, x):
+        x = x.view(x.size(0), self.seq_len*self.aa_var)
+        z = self.encoder(x)
+        
+        recon_x = self.decoder(z)
+        pred_y = self.regressor(z)
+        
+        return z, recon_x, pred_y
